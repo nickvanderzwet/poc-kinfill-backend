@@ -18,4 +18,12 @@ class Product extends BaseProduct
     {
         return new ProductTranslation();
     }
+
+    /**
+     * @todo Check if this function is required, solves an es indexing error.
+     */
+    public function getDocumentId(): int
+    {
+        return $this->id;
+    }
 }

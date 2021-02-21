@@ -2,6 +2,7 @@ version: '3.4'
 
 services:
   php:
+    container_name: 'kinfill-php'
     build:
       context: .
       target: sylius_php
@@ -30,6 +31,7 @@ services:
 
   mysql:
     image: percona:5.7
+    container_name: 'kinfill-mysql'
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-nopassword}
       - MYSQL_DATABASE=sylius
@@ -41,8 +43,20 @@ services:
       # - ./docker/mysql/data:/var/lib/mysql:rw,delegated
     ports:
       - "3306:3306"
+          
+  phpmyadmin:
+    image: 'phpmyadmin/phpmyadmin:5'
+    container_name: 'kinfill-phpmyadmin'
+    links:
+      - 'mysql:db'
+    depends_on:
+      - mysql
+    labels:
+      - 'traefik.enable=true'
+      - "traefik.http.routers.phpmyadmin.rule=Host(`kinfill-phpmyadmin.localhost`)"
 
   nodejs:
+    container_name: 'kinfill-nodejs'
     build:
       context: .
       target: sylius_nodejs
@@ -64,6 +78,7 @@ services:
       - "35729:35729"
 
   nginx:
+    container_name: 'kinfill-nginx'
     build:
       context: .
       target: sylius_nginx
@@ -80,10 +95,14 @@ services:
       # if you develop on Linux, you may use a bind-mounted host directory instead
       # - ./public/media:/srv/sylius/public/media:ro
       - public-media:/srv/sylius/public/media:ro,nocopy
-    ports:
-      - "80:80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx.rule=Host(`kinfill.localhost`)"
+      - "traefik.http.routers.nginx.entrypoints=web"
+      - "traefik.port=80"
 
   mailhog:
+    container_name: 'kinfill-mailhog'
     # do not use in production!
     image: mailhog/mailhog:latest
     environment:
@@ -92,7 +111,28 @@ services:
     #   - ./docker/mailhog/maildir:/maildir:rw,delegated
     ports:
       - "8025:8025"
+      
+  elasticsearch:
+    image: elasticsearch:6.8.13
+    container_name: 'kinfill-elasticsearch'
+    volumes:
+      - elasticsearch-data:/var/lib/elasticsearch
+          
+  traefik:
+    container_name: 'kinfill-traefik'
+    image: "traefik:v2.4"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "${TRAEFIK_PUBLIC_PORT:-80}:80"
+      - "${TRAEFIK_PUBLIC_PORT_API:-8080}:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
 volumes:
   mysql-data:
   public-media:
+  elasticsearch-data:
