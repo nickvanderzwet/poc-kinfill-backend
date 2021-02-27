@@ -1,138 +1,123 @@
 version: '3.4'
 
-services:
-  php:
-    container_name: 'kinfill-php'
-    build:
-      context: .
-      target: sylius_php
-      cache_from:
-        - quay.io/sylius/php:latest
-        - quay.io/sylius/nodejs:latest
-        - quay.io/sylius/nginx:latest
-    image: quay.io/sylius/php:latest
-    depends_on:
-      - mysql
-    environment:
-      - APP_ENV=dev
-      - APP_DEBUG=1
-      - APP_SECRET=EDITME
-      - DATABASE_URL=mysql://sylius:nopassword@mysql/sylius
-      - MAILER_URL=smtp://mailhog:1025
-      - PHP_DATE_TIMEZONE=${PHP_DATE_TIMEZONE:-UTC}
-    volumes:
-      - .:/srv/sylius:rw,cached
-      # if you develop on Linux, you may use a bind-mounted host directory instead
-      # - ./var:/srv/sylius/var:rw
-      - ./public:/srv/sylius/public:rw,delegated
-      # if you develop on Linux, you may use a bind-mounted host directory instead
-      # - ./public/media:/srv/sylius/public/media:rw
-      - public-media:/srv/sylius/public/media:rw
-
-  mysql:
-    image: percona:5.7
-    container_name: 'kinfill-mysql'
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-nopassword}
-      - MYSQL_DATABASE=sylius
-      - MYSQL_USER=sylius
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-nopassword}
-    volumes:
-      - mysql-data:/var/lib/mysql:rw
-      # you may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
-      # - ./docker/mysql/data:/var/lib/mysql:rw,delegated
-    ports:
-      - "3306:3306"
-          
-  phpmyadmin:
-    image: 'phpmyadmin/phpmyadmin:5'
-    container_name: 'kinfill-phpmyadmin'
-    links:
-      - 'mysql:db'
-    depends_on:
-      - mysql
-    labels:
-      - 'traefik.enable=true'
-      - "traefik.http.routers.phpmyadmin.rule=Host(`kinfill-phpmyadmin.localhost`)"
-
-  nodejs:
-    container_name: 'kinfill-nodejs'
-    build:
-      context: .
-      target: sylius_nodejs
-      cache_from:
-        - quay.io/sylius/php:latest
-        - quay.io/sylius/nodejs:latest
-        - quay.io/sylius/nginx:latest
-    image: quay.io/sylius/nodejs:latest
-    depends_on:
-      - php
-    environment:
-      - GULP_ENV=dev
-      - PHP_HOST=php
-      - PHP_PORT=9000
-    volumes:
-      - .:/srv/sylius:rw,cached
-      - ./public:/srv/sylius/public:rw,delegated
-    ports:
-      - "35729:35729"
-
-  nginx:
-    container_name: 'kinfill-nginx'
-    build:
-      context: .
-      target: sylius_nginx
-      cache_from:
-        - quay.io/sylius/php:latest
-        - quay.io/sylius/nodejs:latest
-        - quay.io/sylius/nginx:latest
-    image: quay.io/sylius/nginx:latest
-    depends_on:
-      - php
-      - nodejs # to ensure correct build order
-    volumes:
-      - ./public:/srv/sylius/public:ro
-      # if you develop on Linux, you may use a bind-mounted host directory instead
-      # - ./public/media:/srv/sylius/public/media:ro
-      - public-media:/srv/sylius/public/media:ro,nocopy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nginx.rule=Host(`kinfill.localhost`)"
-      - "traefik.http.routers.nginx.entrypoints=web"
-      - "traefik.port=80"
-
-  mailhog:
-    container_name: 'kinfill-mailhog'
-    # do not use in production!
-    image: mailhog/mailhog:latest
-    environment:
-      - MH_STORAGE=maildir
-    # volumes:
-    #   - ./docker/mailhog/maildir:/maildir:rw,delegated
-    ports:
-      - "8025:8025"
-      
-  elasticsearch:
-    image: elasticsearch:6.8.13
-    container_name: 'kinfill-elasticsearch'
-    volumes:
-      - elasticsearch-data:/var/lib/elasticsearch
-          
-  traefik:
-    container_name: 'kinfill-traefik'
-    image: "traefik:v2.4"
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "${TRAEFIK_PUBLIC_PORT:-80}:80"
-      - "${TRAEFIK_PUBLIC_PORT_API:-8080}:8080"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-
 volumes:
-  mysql-data:
-  public-media:
-  elasticsearch-data:
+    mysql-data:
+    elasticsearch-data:
+    composer:
+    jwt:
+    public-media:
+        
+services:
+    app:
+        container_name: '${COMPOSE_PROJECT_NAME}-app'
+        build:
+            dockerfile: docker-resources/Dockerfile
+            context: .
+        environment:
+            COMPOSER_ALLOW_SUPERUSER: 1
+            COMPOSER_MEMORY_LIMIT: 6G
+            COMPOSER_CACHE_DIR: /root/.composer/cache
+            PHP_HTML_ERRORS: 'On'
+            PHP_DISPLAY_ERRORS: 'On'
+            PHP_DISPLAY_STARTUP_ERRORS: 'On'
+        volumes:
+            - '${APP_VOLUME:-.}:/var/www/sources:${APP_VOLUME_MODE:-cached}'
+            - 'composer:/root/.composer/'
+            - 'jwt:/var/www/sources/config/jwt'
+            - 'public-media:/var/www/sources/public/media'
+        depends_on:
+            - mailcatcher
+            - mysql
+            - elasticsearch
+        env_file:
+            - .env
+        labels:
+            - 'traefik.enable=true'
+
+    mysql:
+        image: 'mysql:5.7'
+        container_name: '${COMPOSE_PROJECT_NAME}-mysql'
+        environment:
+            - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-nopassword}
+            - MYSQL_DATABASE=sylius
+            - MYSQL_USER=sylius
+            - MYSQL_PASSWORD=${MYSQL_PASSWORD:-nopassword}
+        volumes:
+            - mysql-data:/var/lib/mysql
+        env_file:
+            - .env
+          
+    phpmyadmin:
+        image: 'phpmyadmin/phpmyadmin:5'
+        container_name: '${COMPOSE_PROJECT_NAME}-phpmyadmin'
+        links:
+            - 'mysql:db'
+        depends_on:
+            - mysql
+        labels:
+            - 'traefik.enable=true'
+                
+    mailcatcher:
+        image: 'tophfr/mailcatcher:latest'
+        container_name: '${COMPOSE_PROJECT_NAME}-mailcatcher'
+        labels:
+            - 'traefik.enable=true'
+            - 'traefik.http.services.mailserver-${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=80'
+
+    redis:
+        image: redis
+        container_name: '${COMPOSE_PROJECT_NAME}-redis'
+
+    redis-commander:
+        container_name: '${COMPOSE_PROJECT_NAME}-redis-commander'
+        image: 'rediscommander/redis-commander:latest'
+        environment:
+            - 'REDIS_HOSTS=local:redis:6379'
+        labels:
+            - 'traefik.enable=true'
+
+    elasticsearch:
+        image: elasticsearch:6.8.13
+        container_name: '${COMPOSE_PROJECT_NAME}-elasticsearch'
+        volumes:
+            - elasticsearch-data:/var/lib/elasticsearch              
+
+    proxy:
+        image: 'connectholland/baseimages:traefik'
+        container_name: '${COMPOSE_PROJECT_NAME}-proxy'
+        environment:
+            COMPOSE_PROJECT_NAME: '${COMPOSE_PROJECT_NAME}'
+        ports:
+            - '${TRAEFIK_PUBLIC_PORT:-80}:80'
+            - '${TRAEFIK_PUBLIC_PORT_SECURE:-443}:443'
+            - '${TRAEFIK_PUBLIC_PORT_API:-8080}:8080'
+        volumes:
+            - '/var/run/docker.sock:/var/run/docker.sock:ro'
+
+#  nodejs:
+#    container_name: '${COMPOSE_PROJECT_NAME}-nodejs'
+#    build:
+#      context: .
+#      target: sylius_nodejs
+#      cache_from:
+#        - quay.io/sylius/php:latest
+#        - quay.io/sylius/nodejs:latest
+#        - quay.io/sylius/nginx:latest
+#    image: quay.io/sylius/nodejs:latest
+#    depends_on:
+#      - php
+#    environment:
+#      - GULP_ENV=dev
+#      - PHP_HOST=php
+#      - PHP_PORT=9000
+#    volumes:
+#      - .:/var/www/sources:rw,cached
+#      - ./public:/var/www/sources/public:rw,delegated
+#    ports:
+#      - "35729:35729"
+
+
+      
+
+          
+

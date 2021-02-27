@@ -1,0 +1,11 @@
+#!/bin/bash
+
+bin/console doctrine:migrations:migrate --no-debug -n
+
+if [ -z ${@+x} ]; then
+  echo "entrypoint called without arguments; executing default"
+  exec base-entrypoint
+else
+  echo "entrypoint arguments are set to ['$@']; executing..."
+  exec base-entrypoint $@
+fi
