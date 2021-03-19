@@ -4,35 +4,38 @@ volumes:
     mysql-data:
     elasticsearch-data:
     composer:
-    jwt:
-    public-media:
+#    jwt:
+#    public-media:
         
 services:
-    app:
-        container_name: '${COMPOSE_PROJECT_NAME}-app'
-        build:
-            dockerfile: docker-resources/Dockerfile
-            context: .
-        environment:
-            COMPOSER_ALLOW_SUPERUSER: 1
-            COMPOSER_MEMORY_LIMIT: 6G
-            COMPOSER_CACHE_DIR: /root/.composer/cache
-            PHP_HTML_ERRORS: 'On'
-            PHP_DISPLAY_ERRORS: 'On'
-            PHP_DISPLAY_STARTUP_ERRORS: 'On'
-        volumes:
-            - '${APP_VOLUME:-.}:/var/www/sources:${APP_VOLUME_MODE:-cached}'
-            - 'composer:/root/.composer/'
-            - 'jwt:/var/www/sources/config/jwt'
-            - 'public-media:/var/www/sources/public/media'
-        depends_on:
-            - mailcatcher
-            - mysql
-            - elasticsearch
-        env_file:
-            - .env
-        labels:
-            - 'traefik.enable=true'
+    
+#    Using Symfony webserver
+#    
+#    app:
+#        container_name: '${COMPOSE_PROJECT_NAME}-app'
+#        build:
+#            dockerfile: docker-resources/Dockerfile
+#            context: .
+#        environment:
+#            COMPOSER_ALLOW_SUPERUSER: 1
+#            COMPOSER_MEMORY_LIMIT: 6G
+#            COMPOSER_CACHE_DIR: /root/.composer/cache
+#            PHP_HTML_ERRORS: 'On'
+#            PHP_DISPLAY_ERRORS: 'On'
+#            PHP_DISPLAY_STARTUP_ERRORS: 'On'
+#        volumes:
+#            - '${APP_VOLUME:-.}:/var/www/sources:${APP_VOLUME_MODE:-delegated}'
+#            - 'composer:/root/.composer/'
+#            - 'jwt:/var/www/sources/config/jwt'
+#            - 'public-media:/var/www/sources/public/media'
+#        depends_on:
+#            - mailcatcher
+#            - mysql
+#            - elasticsearch
+#        env_file:
+#            - .env
+#        labels:
+#            - 'traefik.enable=true'
 
     mysql:
         image: 'mysql:5.7'
@@ -46,6 +49,10 @@ services:
             - mysql-data:/var/lib/mysql
         env_file:
             - .env
+        ports:
+            - "3306:3306"
+        labels:
+            - 'traefik.enable=true'
           
     phpmyadmin:
         image: 'phpmyadmin/phpmyadmin:5'
@@ -80,7 +87,9 @@ services:
         image: elasticsearch:6.8.13
         container_name: '${COMPOSE_PROJECT_NAME}-elasticsearch'
         volumes:
-            - elasticsearch-data:/var/lib/elasticsearch              
+            - elasticsearch-data:/var/lib/elasticsearch
+        labels:
+            - 'traefik.enable=true'
 
     proxy:
         image: 'connectholland/baseimages:traefik'
