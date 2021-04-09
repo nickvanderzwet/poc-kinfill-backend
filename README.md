@@ -20,6 +20,14 @@ Due performance issues of Docker on Mac we would suggest to use the Symfony Webs
 symfony server:start
 ```
 
+If booting up the frontend gives an error like: 
+
+```
+self signed certificate in certificate chain
+``` 
+
+use  the --no-tls argument
+
 ### Fixtures
 
 Start sylius install to populate the database with fixtures and the creation of an admin account.
@@ -37,12 +45,3 @@ bin/console fos:elastica:populate
 ## VSF Integration
 
 https://github.com/BitBagCommerce/SyliusVueStorefrontPlugin
-
-
-
-
-
-
-
-
- 
